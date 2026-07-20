@@ -16,20 +16,22 @@ see [README.md § Relationship to navidrome-experimental](README.md#relationship
 
 | Piece | Where it lives | Status |
 |---|---|---|
-| Prerequisite: plugin-writable tag endpoints | `navidrome-experimental` (core fork) | 📋 Not started |
-| Open decision: shared vs. private AI tags | Design decision, this doc | ❓ Undecided |
-| The plugin itself | This repo | 📋 Not started |
+| Prerequisite: plugin-writable tag endpoints | `navidrome-experimental` (core fork) | ✅ Done — merged via [PR #16](https://github.com/RFLundgren/navidrome_experimental/pull/16), live in the `:develop` image |
+| Open decision: shared vs. private AI tags | Design decision, this doc | ✅ Implemented Option C (private); A/B remain open if ever needed |
+| The plugin itself | This repo | ✅ Working, tested end-to-end in production against Gemini |
+| Anthropic / OpenAI adapters | This repo | ⚠️ Unit-tested only — not yet live-verified against real accounts |
+| Auto-generated playlists from tags | [ai-mood-playlists](https://github.com/RFLundgren/ai-mood-playlists) (separate repo, private fork for now) | 🚧 In progress — see that repo's own `PLAN.md` |
 
-Nothing here is blocked on anything outside this plan — the prerequisite is small, and the open decision just needs
-someone to pick an option before Phase 2 implementation begins in earnest (Phase 1 is identical regardless of which
-option wins, so it can start immediately).
+See [README.md § Status](README.md#status) for the user-facing summary, and the **Known gaps** section near the
+bottom of this doc for the specific things left to do.
 
 ---
 
 ## Prerequisite: navidrome-experimental changes
 
-This is core-fork work, not part of this repo — tracked in `navidrome-experimental`'s own FEATURE_ROADMAP.md, and
-must land there (or at least be in progress) before this plugin can actually write tags.
+**✅ Done.** Merged via [PR #16](https://github.com/RFLundgren/navidrome_experimental/pull/16) and live in the
+`:develop` image. Kept below as a record of what was built and why — this was core-fork work, not part of this
+repo.
 
 **Why it's needed:** the plugin needs a way to apply/remove tags on a track. `navidrome-experimental` already has a
 private per-user tagging system (`media_file_tag`, shipped for
@@ -92,9 +94,9 @@ Plugin only ever tags under whichever single account it authenticates as (typica
 - **Pros:** simplest possible scope, ships fastest.
 - **Cons:** doesn't deliver the original discussion's "whole library filterable by everyone" outcome by default.
 
-**Recommendation, not yet decided:** start with Option C to get a working end-to-end plugin fastest, upgrade to A or
-B once the classification quality/cost tradeoffs are validated in practice. But this is a real product call, not a
-technical one — make it deliberately, don't default into it.
+**Decided: Option C, implemented and live.** Got a working end-to-end plugin fastest; upgrading to A or B remains an
+option later if the "everyone sees AI tags" outcome ends up mattering in practice, but there's no current plan to
+change it.
 
 ---
 
@@ -180,38 +182,60 @@ effort here — the visibility decision (Option A/B/C above) is the real scoping
 
 ## Build plan
 
-**Phase 0 — prerequisite.** `setUserTag`/`removeUserTag`/`getUserTags` land in `navidrome-experimental`. Blocks
-Phase 2 (can't write real tags without it), but Phase 1 below doesn't depend on it.
+**Phase 0 — prerequisite.** ✅ Done. `setUserTag`/`removeUserTag`/`getUserTags` merged into `navidrome-experimental`.
 
-**Phase 1 — plugin skeleton.** Manifest, scheduler wiring, `kvstore`-backed high-water mark, reading tracks via
-`SubsonicAPIService.Call`. Buildable and testable (via the Extism CLI, no live Navidrome server needed for basic
-capability-function testing) independent of the prerequisite or the AI provider — this is pure plumbing.
+**Phase 1 — plugin skeleton.** ✅ Done. Manifest, scheduler wiring, `kvstore`-backed high-water mark, reading tracks
+via `SubsonicAPIService.Call`. Unit-tested with the PDK's native-build mocks (no TinyGo/WASM runtime needed for
+`go test`).
 
-**Phase 2 — one working provider adapter.** Pick one provider (Claude, given the cost data above is already worked
-out for it) and get a real end-to-end classification working: read tracks → call API → get tags → write via
-`setUserTag.view` (needs Phase 0 done). Ship Option C (fully private) first to validate the whole pipeline before
-adding the Option A/B visibility complexity.
+**Phase 2 — one working provider adapter.** ✅ Done, live-tested against **Gemini** in production (not Claude as
+originally planned — Gemini is what got tested first in practice). Full pipeline confirmed working: scan → skip
+already-tagged → batch → classify → write via `setUserTag.view`, under Option C.
 
-**Phase 3 — remaining provider adapters.** OpenAI, Gemini — same `Classify()` interface, new adapter
-implementations only.
+**Phase 3 — remaining provider adapters.** ✅ Anthropic and OpenAI adapters implemented behind the same
+`Classify()` interface, unit-tested. ⚠️ Neither has been live-verified against a real account yet — that's the
+main concrete gap left in this repo.
 
-**Phase 4 — visibility upgrade, if warranted.** Move from Option C to A or B based on what Phase 2/3 usage
-actually shows about classification quality and how much the "everyone sees AI tags" outcome matters in practice.
+**Phase 4 — visibility upgrade, if warranted.** Not started, no current plan to do it — see the Open decision
+section above.
+
+**Phase 5 — auto-generated playlists from tags.** 🚧 New, not originally in this plan. Being built as a separate
+project — see [ai-mood-playlists](https://github.com/RFLundgren/ai-mood-playlists)'s own `PLAN.md` for details.
+That repo is a fork of an existing audio-analysis-based mood-playlist plugin, being reworked to build its
+playlists from this plugin's tags instead of its own audio analysis.
 
 ## Verification
 
-- Phase 1 (scheduler/kvstore/read plumbing) is testable standalone with the Extism CLI (`extism call plugin.wasm
-  nd_scheduler_callback --wasi`), no live server needed for the parts that don't call `setUserTag.view`.
-- Phase 2 needs a real `navidrome-experimental` instance with Phase 0 merged, and a real (or sandboxed/mocked)
-  provider API key — test against a small library first, not the full collection, given real API cost is involved.
+- ✅ Unit tests cover the scan/skip/batch logic and all three provider adapters, running natively via `go test`
+  (the PDK's mock stubs, no TinyGo/WASM runtime needed).
+- ✅ Live-tested end-to-end in production against a real Navidrome instance and a real Gemini API key: manifest
+  install, permission grants, scheduled scan, task-queue processing, provider classification, and tag write-back
+  all confirmed working. Along the way this surfaced and fixed: a manifest validation error (`subsonicapi` needs
+  `users` declared too), a too-aggressive default task-retry backoff against provider rate limits, and a wrong
+  model ID string (fixed via config, no code change needed).
+- Anthropic and OpenAI still need the same live-verification pass Gemini got — not expected to surface anything
+  new given they share the same interface, but not yet actually done.
 - Before enabling `allUsers: true` (Option A) or the shared-owner union (Option B) against a real multi-user
   library, verify against a throwaway library/test users first — a broadcast-write bug would apply incorrect tags
-  to every user's namespace at once, which is annoying to bulk-undo.
+  to every user's namespace at once, which is annoying to bulk-undo. (Not relevant unless A/B ever get picked up.)
+
+## Known gaps / remaining work
+
+- **Anthropic/OpenAI live verification** — implemented and unit-tested, not yet run against a real account.
+- **`tagCategories` scope** — currently defaults to all three (`genre`, `mood`, `language`). Discussed dropping
+  `language` since the two-column playlist/browsing use case in mind only needs genre + mood — not yet actually
+  changed in the manifest default or tested; currently just a `tagCategories` config edit away, no code change
+  needed.
+- **Two-column "My Tags" display** — splitting the Songs list's single merged tag column into separate
+  genre/mood columns (stripping the `genre:`/`mood:` prefix for display, keeping it in the stored data) was
+  discussed as a good readability win. This is a `navidrome-experimental` UI change (`ui/src/song/SongList.jsx`),
+  not something this repo controls — not started.
+- **Auto-generated playlists** — the actual motivating reason for the two-column idea and a bigger piece of
+  work; tracked entirely in [ai-mood-playlists](https://github.com/RFLundgren/ai-mood-playlists), not here.
 
 ## Open questions, not resolved
 
-- Visibility option (A/B/C) — see above.
 - Whether `sharedTagOwner` (Option B) is a real Navidrome user account the admin creates, or a synthetic
   ID that never logs in — affects whether it needs to be excluded from user-facing lists (e.g. sharing
-  dialogs, "who's online").
+  dialogs, "who's online"). Moot unless Option B gets picked up.
 - License for this repo — not yet decided.
