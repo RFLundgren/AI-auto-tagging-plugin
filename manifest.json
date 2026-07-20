@@ -1,0 +1,139 @@
+{
+  "name": "AI Auto-Tagging",
+  "author": "RFLundgren",
+  "version": "0.1.0",
+  "description": "Auto-classifies tracks (genre, mood, language, etc.) using an AI provider so the library becomes filterable by AI-suggested tags",
+  "website": "https://github.com/RFLundgren/AI-Auto-Tagging-Plugin",
+  "permissions": {
+    "scheduler": {
+      "reason": "Periodically scan the library for tracks to classify"
+    },
+    "subsonicapi": {
+      "reason": "Read track metadata (search3) and read/write user tags (getUserTags/setUserTag)"
+    },
+    "users": {
+      "reason": "Required alongside subsonicapi - identifies which user's library view and tags the plugin acts as"
+    },
+    "kvstore": {
+      "reason": "Track a high-water mark so scheduled runs only scan tracks not yet covered"
+    },
+    "taskqueue": {
+      "reason": "Batch-process track classification in the background, with retries and a concurrency cap"
+    },
+    "http": {
+      "reason": "Call the configured AI provider's classification API",
+      "requiredHosts": [
+        "api.anthropic.com",
+        "api.openai.com",
+        "generativelanguage.googleapis.com"
+      ]
+    }
+  },
+  "config": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "title": "AI Provider",
+          "description": "Which AI provider to call for classification",
+          "enum": ["anthropic", "openai", "gemini"],
+          "default": "anthropic"
+        },
+        "apiKey": {
+          "type": "string",
+          "title": "API Key",
+          "description": "API key for the selected provider"
+        },
+        "model": {
+          "type": "string",
+          "title": "Model",
+          "description": "Model name for the selected provider (e.g. claude-haiku-4-5, gpt-5-mini, gemini-flash)",
+          "default": "claude-haiku-4-5"
+        },
+        "tagCategories": {
+          "type": "array",
+          "title": "Tag Categories",
+          "description": "Which categories to suggest tags for",
+          "items": {
+            "type": "string",
+            "enum": ["genre", "mood", "language"]
+          },
+          "default": ["genre", "mood", "language"]
+        },
+        "libraryUser": {
+          "type": "string",
+          "title": "Library User",
+          "description": "Username whose library view is used to read tracks and read/write tags",
+          "default": "admin"
+        },
+        "cron": {
+          "type": "string",
+          "title": "Scan Schedule",
+          "description": "Cron expression for how often to scan the library (default: daily at 03:00)",
+          "default": "0 3 * * *"
+        },
+        "batchSize": {
+          "type": "integer",
+          "title": "Batch Size",
+          "description": "Tracks per classification task",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 200
+        },
+        "maxTracksPerRun": {
+          "type": "integer",
+          "title": "Max Tracks Per Run",
+          "description": "Cost/time control ceiling on how many tracks are scanned per scheduled run",
+          "default": 500,
+          "minimum": 1
+        }
+      }
+    },
+    "uiSchema": {
+      "type": "VerticalLayout",
+      "elements": [
+        {
+          "type": "Control",
+          "scope": "#/properties/provider"
+        },
+        {
+          "type": "Control",
+          "scope": "#/properties/apiKey",
+          "options": {
+            "format": "password"
+          }
+        },
+        {
+          "type": "Control",
+          "scope": "#/properties/model"
+        },
+        {
+          "type": "Control",
+          "scope": "#/properties/tagCategories"
+        },
+        {
+          "type": "Control",
+          "scope": "#/properties/libraryUser"
+        },
+        {
+          "type": "Control",
+          "scope": "#/properties/cron"
+        },
+        {
+          "type": "HorizontalLayout",
+          "elements": [
+            {
+              "type": "Control",
+              "scope": "#/properties/batchSize"
+            },
+            {
+              "type": "Control",
+              "scope": "#/properties/maxTracksPerRun"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
