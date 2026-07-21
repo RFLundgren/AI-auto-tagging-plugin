@@ -38,6 +38,41 @@ shared/broadcast visibility options (A/B) remain a deliberate future decision, n
    doesn't fragment into near-duplicates (`chill`/`relaxed`/`mellow` for the same idea).
 4. Tags are written back via `setUserTag.view`.
 
+## Customizing the genre/mood vocabulary
+
+The **Genre Vocabulary** and **Mood Vocabulary** config fields control the fixed word list the AI is allowed to
+choose from for those two categories (see the vocabulary-constraint explanation above). Each is a plain
+comma-separated text box, and both come pre-filled with the built-in defaults when you first open the config
+screen — so editing means trimming down or adding to existing text, not typing a list from scratch.
+
+For example, the Genre Vocabulary field starts as:
+
+```
+rock, pop, electronic, hip hop, jazz, classical, metal, folk, country, r&b, soul, blues, reggae, punk, indie, ambient, new age, world, funk, disco, house, techno, alternative, soundtrack, experimental
+```
+
+To add `trance` and remove `soundtrack` and `experimental` (say your library has none of those), edit the field
+to read:
+
+```
+rock, pop, electronic, hip hop, jazz, classical, metal, folk, country, r&b, soul, blues, reggae, punk, indie, ambient, new age, world, funk, disco, house, techno, alternative, trance
+```
+
+Anything you add here becomes a value the AI is *allowed* to use going forward — it doesn't retroactively
+re-tag anything already classified, and it doesn't force the AI to use it either (it only picks from the list
+what actually fits a track). The Mood Vocabulary field works the same way, starting from:
+
+```
+happy, chill, energetic, melancholy, party, aggressive, romantic, dreamy, dark, uplifting, nostalgic, peaceful
+```
+
+Keep both lists reasonably short and free of near-duplicates (`chill` and `relaxed` meaning the same thing, say)
+— that's the entire point of constraining the vocabulary in the first place. If you use
+[AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists), whatever you configure here is exactly the
+set of genre/mood playlists it can build, so keep the two plugins' expectations in sync (that plugin's own
+allowlist fields are pre-filled with this same default list, and only need editing if you've customized this
+field too).
+
 ## Cost & AI provider responsibility
 
 This plugin calls a third-party AI provider (Anthropic, OpenAI, or Gemini) directly using **your own API key**,
@@ -65,6 +100,7 @@ Set via Navidrome's Admin → Plugins → AI Auto-Tagging → Config, after inst
 | `apiKey` | The selected provider's API key |
 | `model` | Model name for the selected provider — verify the exact ID against your provider's current model list |
 | `tagCategories` | Which categories to suggest: any of `genre`, `mood`, `language`. If you're not using [AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists) or otherwise don't need language tags, set this to just `genre, mood` — the manifest default includes `language` for anyone installing fresh, but it's a config-only change, no code involved, and won't automatically drop tags already written (see `PLAN.md` for a one-time cleanup approach if you're changing this after already tagging a library) |
+| `genreVocabulary` / `moodVocabulary` | Comma-separated, pre-filled with the built-in defaults — edit down or add to customize which genre/mood words the AI is allowed to use. See **Customizing the genre/mood vocabulary** above |
 | `libraryUser` | Username whose library view is used to read tracks and read/write tags |
 | `cron` | Cron expression for how often to scan for untagged tracks |
 | `batchSize` | Tracks per classification API call |
