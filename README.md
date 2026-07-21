@@ -2,7 +2,10 @@
 
 A [Navidrome](https://www.navidrome.org/) plugin that auto-classifies tracks (genre, mood, language) using an AI
 provider (Anthropic, OpenAI, or Gemini), so a whole library becomes filterable by AI-suggested tags instead of
-relying on manually maintained playlists per genre/language.
+relying on manually maintained playlists per genre/language. A companion project,
+[AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists), builds and maintains actual playlists from
+these tags automatically — one per discovered genre/mood value — if you want that on top of just the tags
+themselves.
 
 Built against [navidrome-experimental](https://github.com/RFLundgren/navidrome_experimental) (a personal fork of
 Navidrome), using its `media_file_tag` user-tagging feature via three Subsonic endpoints this project added there
@@ -27,7 +30,12 @@ shared/broadcast visibility options (A/B) remain a deliberate future decision, n
    check per track, not a repeated AI call.
 3. Untagged tracks are batched and handed to the configured AI provider, which returns suggested tags per category
    (genre/mood/language), prefixed to avoid collisions in the shared freeform tag namespace (e.g. `genre:rock`,
-   `mood:energetic`, `language:english`).
+   `mood:energetic`, `language:english`). `genre` and `mood` are constrained to a fixed, curated vocabulary (25
+   genres, 12 moods — see `genreVocabulary`/`moodVocabulary` in `providers.go`), with anything the model returns
+   outside that list silently dropped. `language` stays open-vocabulary on purpose, since it should reflect the
+   track's actual language rather than a curated list. The vocabulary constraint exists specifically so
+   [AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists)' one-playlist-per-tag-value approach
+   doesn't fragment into near-duplicates (`chill`/`relaxed`/`mellow` for the same idea).
 4. Tags are written back via `setUserTag.view`.
 
 ## Cost & AI provider responsibility
@@ -56,7 +64,7 @@ Set via Navidrome's Admin → Plugins → AI Auto-Tagging → Config, after inst
 | `provider` | `anthropic`, `openai`, or `gemini` |
 | `apiKey` | The selected provider's API key |
 | `model` | Model name for the selected provider — verify the exact ID against your provider's current model list |
-| `tagCategories` | Which categories to suggest: any of `genre`, `mood`, `language` |
+| `tagCategories` | Which categories to suggest: any of `genre`, `mood`, `language`. If you're not using [AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists) or otherwise don't need language tags, set this to just `genre, mood` — the manifest default includes `language` for anyone installing fresh, but it's a config-only change, no code involved, and won't automatically drop tags already written (see `PLAN.md` for a one-time cleanup approach if you're changing this after already tagging a library) |
 | `libraryUser` | Username whose library view is used to read tracks and read/write tags |
 | `cron` | Cron expression for how often to scan for untagged tracks |
 | `batchSize` | Tracks per classification API call |

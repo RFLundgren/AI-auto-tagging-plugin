@@ -237,6 +237,14 @@ playlists from this plugin's tags instead of its own audio analysis.
   not something this repo controls — not started.
 - **Auto-generated playlists** — the actual motivating reason for the two-column idea and a bigger piece of
   work; tracked entirely in [ai-mood-playlists](https://github.com/RFLundgren/ai-mood-playlists), not here.
+- **Cleaning up tags written before the fixed vocabulary existed / before dropping a category** — there's no
+  bulk-delete built into the plugin (only single-tag `removeUserTag.view`). The approach used in practice: a
+  one-off PowerShell script that calls `getAllUserTags.view` to list every tag, `getSongsByUserTag.view` per tag
+  to find every track carrying it, and `removeUserTag.view` per (track, tag) pair to clear it — scoped to
+  whichever tag prefixes you want gone (e.g. `genre:`/`mood:`/`language:`). Defaults to a dry run (prints counts,
+  removes nothing) until explicitly confirmed. Not committed anywhere as a repo script since it's a one-time
+  operation, not a maintained tool — recreate it from this description if needed again. After clearing, tracks
+  show up as untagged again and get picked up on AI Auto-Tagging's next scheduled scan.
 - **AI Tags vs. My Tags as genuinely separate concepts** — today's split between AI-written and user-written
   tags is just a naming convention (the `genre:`/`mood:`/`language:` prefix), not a structural one; both live in
   the same `media_file_tag` rows for whichever account is authenticated. A real separation needs a `source`/
