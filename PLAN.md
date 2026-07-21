@@ -237,6 +237,15 @@ playlists from this plugin's tags instead of its own audio analysis.
   not something this repo controls — not started.
 - **Auto-generated playlists** — the actual motivating reason for the two-column idea and a bigger piece of
   work; tracked entirely in [ai-mood-playlists](https://github.com/RFLundgren/ai-mood-playlists), not here.
+- **AI Tags vs. My Tags as genuinely separate concepts** — today's split between AI-written and user-written
+  tags is just a naming convention (the `genre:`/`mood:`/`language:` prefix), not a structural one; both live in
+  the same `media_file_tag` rows for whichever account is authenticated. A real separation needs a `source`/
+  `type` column on `media_file_tag` itself (`ai` vs. `user`), plus updates to `MediaFileTagRepository` and the
+  Songs list UI to show/filter them as two distinct things. Bigger, deliberate `navidrome-experimental` schema
+  work, similar in scope to the still-undecided Option A/B visibility question below - not started, revisit
+  later. Orthogonal to Option A/B/C: this is about tag *provenance* (who/what wrote it), not tag *visibility*
+  (who can see it) - a single user could have both AI and manual tags side by side under this design, no second
+  identity needed.
 
 ## Open questions, not resolved
 
