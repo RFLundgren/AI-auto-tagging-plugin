@@ -22,6 +22,7 @@ func TestNewClassifier_KnownProviders(t *testing.T) {
 }
 
 func TestParseClassifyResponse_StripsMarkdownFence(t *testing.T) {
+	resetMocks()
 	raw := "```json\n{\"t1\":[\"genre:rock\"]}\n```"
 	got, err := parseClassifyResponse(raw)
 	require.NoError(t, err)
@@ -34,6 +35,7 @@ func TestParseClassifyResponse_InvalidJSON(t *testing.T) {
 }
 
 func TestBuildClassifyPrompt_IncludesTrackIDsAndCategories(t *testing.T) {
+	resetMocks()
 	prompt := buildClassifyPrompt([]trackInfo{
 		{ID: "t1", Artist: "Artist A", Title: "Title A"},
 	}, []string{"genre", "mood"})
@@ -45,6 +47,7 @@ func TestBuildClassifyPrompt_IncludesTrackIDsAndCategories(t *testing.T) {
 }
 
 func TestBuildClassifyPrompt_ListsFixedVocabularyForGenreAndMood(t *testing.T) {
+	resetMocks()
 	prompt := buildClassifyPrompt([]trackInfo{{ID: "t1"}}, []string{"genre", "mood", "language"})
 
 	require.Contains(t, prompt, "For genre, choose only from this list:")
@@ -55,6 +58,7 @@ func TestBuildClassifyPrompt_ListsFixedVocabularyForGenreAndMood(t *testing.T) {
 }
 
 func TestParseClassifyResponse_DropsTagsOutsideFixedVocabulary(t *testing.T) {
+	resetMocks()
 	raw := `{"t1":["genre:rock","genre:made-up-genre","mood:chill","mood:not-a-real-mood","language:french"]}`
 	got, err := parseClassifyResponse(raw)
 	require.NoError(t, err)
@@ -62,6 +66,7 @@ func TestParseClassifyResponse_DropsTagsOutsideFixedVocabulary(t *testing.T) {
 }
 
 func TestParseClassifyResponse_DropsTrackEntirelyIfAllTagsInvalid(t *testing.T) {
+	resetMocks()
 	raw := `{"t1":["genre:not-real"],"t2":["genre:rock"]}`
 	got, err := parseClassifyResponse(raw)
 	require.NoError(t, err)
@@ -69,10 +74,19 @@ func TestParseClassifyResponse_DropsTrackEntirelyIfAllTagsInvalid(t *testing.T) 
 }
 
 func TestVocabularyFor_UnknownCategoryIsOpen(t *testing.T) {
+	resetMocks()
 	require.Nil(t, vocabularyFor("language"))
 	require.Nil(t, vocabularyFor("bogus"))
 	require.NotEmpty(t, vocabularyFor("genre"))
 	require.NotEmpty(t, vocabularyFor("mood"))
+}
+
+func TestVocabularyFor_UsesConfiguredOverride(t *testing.T) {
+	resetMocks()
+	host.ConfigMock.ExpectedCalls, host.ConfigMock.Calls = nil, nil // drop the blanket "unset" defaults below
+	host.ConfigMock.On("Get", "genreVocabulary").Return("trance, dubstep", true).Once()
+
+	require.Equal(t, []string{"trance", "dubstep"}, vocabularyFor("genre"))
 }
 
 func TestOpenAIAdapter_Classify(t *testing.T) {

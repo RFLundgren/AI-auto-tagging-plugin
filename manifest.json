@@ -61,6 +61,18 @@
           },
           "default": ["genre", "mood", "language"]
         },
+        "genreVocabulary": {
+          "type": "string",
+          "title": "Genre Vocabulary",
+          "description": "Comma-separated list of genre words the AI is allowed to use. Pre-filled with the built-in defaults - add or remove entries as you like. Keeping this to a fixed, curated list (rather than open-ended AI word choice) avoids near-duplicate tags like 'hip hop' vs 'hiphop' vs 'rap' across separate classification runs.",
+          "default": "rock, pop, electronic, hip hop, jazz, classical, metal, folk, country, r&b, soul, blues, reggae, punk, indie, ambient, new age, world, funk, disco, house, techno, alternative, soundtrack, experimental"
+        },
+        "moodVocabulary": {
+          "type": "string",
+          "title": "Mood Vocabulary",
+          "description": "Comma-separated list of mood words the AI is allowed to use. Pre-filled with the built-in defaults - add or remove entries as you like. Keeping this to a fixed, curated list (rather than open-ended AI word choice) avoids near-duplicate tags like 'chill' vs 'relaxed' vs 'mellow' across separate classification runs.",
+          "default": "happy, chill, energetic, melancholy, party, aggressive, romantic, dreamy, dark, uplifting, nostalgic, peaceful"
+        },
         "libraryUser": {
           "type": "string",
           "title": "Library User",
@@ -111,6 +123,14 @@
         {
           "type": "Control",
           "scope": "#/properties/tagCategories"
+        },
+        {
+          "type": "Control",
+          "scope": "#/properties/genreVocabulary"
+        },
+        {
+          "type": "Control",
+          "scope": "#/properties/moodVocabulary"
         },
         {
           "type": "Control",

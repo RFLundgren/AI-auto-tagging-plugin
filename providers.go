@@ -10,36 +10,48 @@ import (
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 )
 
-// genreVocabulary and moodVocabulary constrain the model to a fixed, small
-// set of values per category. Without this, open-ended word choice tends to
-// fragment into near-duplicates across batches (e.g. "chill"/"relaxed"/
-// "mellow" for the same concept) - a problem for anything building one
-// playlist per discovered tag value (see ai-mood-playlists). language is
-// deliberately left open-vocabulary since it should reflect the track's
-// actual language, not a curated list.
-var genreVocabulary = []string{
-	"rock", "pop", "electronic", "hip hop", "jazz", "classical", "metal",
-	"folk", "country", "r&b", "soul", "blues", "reggae", "punk", "indie",
-	"ambient", "new age", "world", "funk", "disco", "house", "techno",
-	"alternative", "soundtrack", "experimental",
-}
+// defaultGenreVocabulary and defaultMoodVocabulary constrain the model to a
+// fixed, small set of values per category unless overridden via the
+// genreVocabulary/moodVocabulary config fields. Without this, open-ended word
+// choice tends to fragment into near-duplicates across batches (e.g.
+// "chill"/"relaxed"/"mellow" for the same concept) - a problem for anything
+// building one playlist per discovered tag value (see ai-mood-playlists).
+// language is deliberately left open-vocabulary since it should reflect the
+// track's actual language, not a curated list.
+//
+// These defaults are also what the config UI pre-fills the genreVocabulary/
+// moodVocabulary fields with, so a user edits this list down (or adds to it)
+// rather than typing a vocabulary from scratch.
+const defaultGenreVocabulary = "rock, pop, electronic, hip hop, jazz, classical, metal, folk, country, r&b, " +
+	"soul, blues, reggae, punk, indie, ambient, new age, world, funk, disco, house, techno, alternative, " +
+	"soundtrack, experimental"
 
-var moodVocabulary = []string{
-	"happy", "chill", "energetic", "melancholy", "party", "aggressive",
-	"romantic", "dreamy", "dark", "uplifting", "nostalgic", "peaceful",
-}
+const defaultMoodVocabulary = "happy, chill, energetic, melancholy, party, aggressive, romantic, dreamy, " +
+	"dark, uplifting, nostalgic, peaceful"
 
-// vocabularyFor returns the fixed set of allowed values for a category, or
-// nil if the category is open-vocabulary (e.g. language).
+// vocabularyFor returns the configured set of allowed values for a category
+// (from the genreVocabulary/moodVocabulary config fields), or nil if the
+// category is open-vocabulary (e.g. language).
 func vocabularyFor(category string) []string {
 	switch category {
 	case "genre":
-		return genreVocabulary
+		return parseVocabularyList(configString("genreVocabulary", defaultGenreVocabulary))
 	case "mood":
-		return moodVocabulary
+		return parseVocabularyList(configString("moodVocabulary", defaultMoodVocabulary))
 	default:
 		return nil
 	}
+}
+
+func parseVocabularyList(raw string) []string {
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.ToLower(strings.TrimSpace(p)); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // classifier is implemented by each AI provider adapter. Classify returns a

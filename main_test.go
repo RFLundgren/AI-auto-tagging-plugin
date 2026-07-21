@@ -24,6 +24,12 @@ func resetMocks() {
 	host.HTTPMock.ExpectedCalls, host.HTTPMock.Calls = nil, nil
 	pdk.PDKMock.ExpectedCalls, pdk.PDKMock.Calls = nil, nil
 	pdk.PDKMock.On("Log", mock.Anything, mock.Anything).Return().Maybe()
+
+	// Classifying always reads both vocabulary fields (via vocabularyFor), so
+	// default them to "unset" (= use the built-in default list) for tests
+	// that don't care about a custom vocabulary.
+	host.ConfigMock.On("Get", "genreVocabulary").Return("", false).Maybe()
+	host.ConfigMock.On("Get", "moodVocabulary").Return("", false).Maybe()
 }
 
 func TestOnInit_CreatesQueueAndSchedulesScan(t *testing.T) {
