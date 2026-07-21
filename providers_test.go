@@ -44,6 +44,37 @@ func TestBuildClassifyPrompt_IncludesTrackIDsAndCategories(t *testing.T) {
 	require.Contains(t, prompt, "Title A")
 }
 
+func TestBuildClassifyPrompt_ListsFixedVocabularyForGenreAndMood(t *testing.T) {
+	prompt := buildClassifyPrompt([]trackInfo{{ID: "t1"}}, []string{"genre", "mood", "language"})
+
+	require.Contains(t, prompt, "For genre, choose only from this list:")
+	require.Contains(t, prompt, "rock")
+	require.Contains(t, prompt, "For mood, choose only from this list:")
+	require.Contains(t, prompt, "chill")
+	require.Contains(t, prompt, "For language, use the track's actual sung/spoken language")
+}
+
+func TestParseClassifyResponse_DropsTagsOutsideFixedVocabulary(t *testing.T) {
+	raw := `{"t1":["genre:rock","genre:made-up-genre","mood:chill","mood:not-a-real-mood","language:french"]}`
+	got, err := parseClassifyResponse(raw)
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{"t1": {"genre:rock", "mood:chill", "language:french"}}, got)
+}
+
+func TestParseClassifyResponse_DropsTrackEntirelyIfAllTagsInvalid(t *testing.T) {
+	raw := `{"t1":["genre:not-real"],"t2":["genre:rock"]}`
+	got, err := parseClassifyResponse(raw)
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{"t2": {"genre:rock"}}, got)
+}
+
+func TestVocabularyFor_UnknownCategoryIsOpen(t *testing.T) {
+	require.Nil(t, vocabularyFor("language"))
+	require.Nil(t, vocabularyFor("bogus"))
+	require.NotEmpty(t, vocabularyFor("genre"))
+	require.NotEmpty(t, vocabularyFor("mood"))
+}
+
 func TestOpenAIAdapter_Classify(t *testing.T) {
 	resetMocks()
 

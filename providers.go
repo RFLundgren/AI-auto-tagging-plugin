@@ -4,10 +4,43 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 )
+
+// genreVocabulary and moodVocabulary constrain the model to a fixed, small
+// set of values per category. Without this, open-ended word choice tends to
+// fragment into near-duplicates across batches (e.g. "chill"/"relaxed"/
+// "mellow" for the same concept) - a problem for anything building one
+// playlist per discovered tag value (see ai-mood-playlists). language is
+// deliberately left open-vocabulary since it should reflect the track's
+// actual language, not a curated list.
+var genreVocabulary = []string{
+	"rock", "pop", "electronic", "hip hop", "jazz", "classical", "metal",
+	"folk", "country", "r&b", "soul", "blues", "reggae", "punk", "indie",
+	"ambient", "new age", "world", "funk", "disco", "house", "techno",
+	"alternative", "soundtrack", "experimental",
+}
+
+var moodVocabulary = []string{
+	"happy", "chill", "energetic", "melancholy", "party", "aggressive",
+	"romantic", "dreamy", "dark", "uplifting", "nostalgic", "peaceful",
+}
+
+// vocabularyFor returns the fixed set of allowed values for a category, or
+// nil if the category is open-vocabulary (e.g. language).
+func vocabularyFor(category string) []string {
+	switch category {
+	case "genre":
+		return genreVocabulary
+	case "mood":
+		return moodVocabulary
+	default:
+		return nil
+	}
+}
 
 // classifier is implemented by each AI provider adapter. Classify returns a
 // map from track ID to suggested tags (each tag prefixed with its category,
@@ -37,6 +70,17 @@ func buildClassifyPrompt(tracks []trackInfo, categories []string) string {
 	b.WriteString("You are a music classification assistant. For each track below, suggest tags for these categories: ")
 	b.WriteString(strings.Join(categories, ", "))
 	b.WriteString(".\n\n")
+	for _, category := range categories {
+		switch {
+		case len(vocabularyFor(category)) > 0:
+			fmt.Fprintf(&b, "For %s, choose only from this list: %s.\n",
+				category, strings.Join(vocabularyFor(category), ", "))
+		case category == "language":
+			b.WriteString("For language, use the track's actual sung/spoken language (e.g. \"english\", " +
+				"\"french\"), or \"instrumental\" if there are no vocals.\n")
+		}
+	}
+	b.WriteString("\n")
 	b.WriteString("Respond with ONLY a JSON object (no markdown, no explanation) mapping each track's id to an array of tag strings. ")
 	b.WriteString("Prefix every tag with its category, e.g. \"genre:rock\", \"mood:energetic\", \"language:english\". ")
 	b.WriteString("Suggest 1-3 tags per category per track. Use lowercase values.\n\n")
@@ -66,7 +110,33 @@ func parseClassifyResponse(raw string) (map[string][]string, error) {
 	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		return nil, fmt.Errorf("parsing model response as JSON: %w", err)
 	}
-	return result, nil
+	return filterToVocabulary(result), nil
+}
+
+// filterToVocabulary drops any tag whose category has a fixed vocabulary
+// (see vocabularyFor) but whose value isn't in it, guarding against the
+// model occasionally ignoring the vocabulary instruction. Tags in
+// categories without a fixed vocabulary (e.g. language) pass through
+// unchanged.
+func filterToVocabulary(tagsByTrack map[string][]string) map[string][]string {
+	filtered := make(map[string][]string, len(tagsByTrack))
+	for trackID, tags := range tagsByTrack {
+		var kept []string
+		for _, tag := range tags {
+			category, value, ok := strings.Cut(tag, ":")
+			if !ok {
+				kept = append(kept, tag)
+				continue
+			}
+			if vocab := vocabularyFor(category); len(vocab) == 0 || slices.Contains(vocab, value) {
+				kept = append(kept, tag)
+			}
+		}
+		if len(kept) > 0 {
+			filtered[trackID] = kept
+		}
+	}
+	return filtered
 }
 
 const httpTimeoutMs = 30000

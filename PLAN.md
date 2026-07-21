@@ -221,6 +221,11 @@ playlists from this plugin's tags instead of its own audio analysis.
 
 ## Known gaps / remaining work
 
+- ✅ **Fixed vocabulary for genre/mood** — done. The prompt now constrains `genre` and `mood` tags to a fixed,
+  small list each (`genreVocabulary`/`moodVocabulary` in `providers.go`), with a post-parse filter dropping
+  anything the model returns outside that list. `language` stays open-vocabulary on purpose. This exists so
+  ai-mood-playlists' "one playlist per discovered tag value" doesn't fragment into near-duplicates
+  (`chill`/`relaxed`/`mellow` for the same concept) — see that repo's `PLAN.md`.
 - **Anthropic/OpenAI live verification** — implemented and unit-tested, not yet run against a real account.
 - **`tagCategories` scope** — currently defaults to all three (`genre`, `mood`, `language`). Discussed dropping
   `language` since the two-column playlist/browsing use case in mind only needs genre + mood — not yet actually
