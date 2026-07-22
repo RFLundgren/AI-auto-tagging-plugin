@@ -146,6 +146,38 @@ logs, adjust" rather than a one-shot setting.
 *scanned and queued* per scheduled run, not how fast already-queued tracks get classified. Raising concurrency is
 what actually speeds up classification itself.
 
+## Sizing `cron` and `maxTracksPerRun`
+
+These two settings answer a different question from concurrency above: not "how fast does classification run"
+but "how often does the plugin look for new untagged tracks, and how many does it pick up each time." The right
+values depend on which phase you're in.
+
+**Initial backfill** (first time running this against an existing library): the scan step itself is cheap — it's
+just local `getUserTags.view` calls, no AI provider involved — so there's no downside to running it often. A
+reasonable starting point:
+
+- `cron`: `*/30 * * * *` (every 30 minutes)
+- `maxTracksPerRun`: `2000`
+
+At those settings, a ~15,000-track library clears in about 8 runs (roughly 4 hours). I don't have hard timing
+data on exactly how many tracks fit in the scheduler's execution window (each run needs to finish quickly — it's
+just enqueuing, not waiting for classification), so treat `2000` as a starting point, not a guarantee: watch the
+logs for `"scan complete - N track(s) scanned, M enqueued"` after a run or two. If that line shows up consistently
+with the full count you configured, it's comfortably finishing in time and you can raise it further to clear the
+backlog in fewer runs; if it never seems to be scanning as many as expected, dial it down.
+
+It's safe to experiment here — the plugin tracks a high-water mark (an offset in its KV store) between runs, so
+even a run that gets cut off partway through doesn't lose or double-process anything; the next run just resumes
+exactly where the last one left off.
+
+**Steady state** (library's mostly tagged, just catching new additions): there's no reason to keep scanning every
+30 minutes once nothing new is being found. Switch back to something like the default:
+
+- `cron`: `0 3 * * *` (once daily) — or `0 */6 * * *` (every 6 hours) if you add music often enough that daily
+  feels slow
+- `maxTracksPerRun`: back down to something modest like `500` (the default) — new tracks trickle in far slower
+  than an initial backfill needs to clear
+
 ## Configuration
 
 Set via Navidrome's Admin → Plugins → AI Auto-Tagging → Config, after installing the `.ndp` package:
