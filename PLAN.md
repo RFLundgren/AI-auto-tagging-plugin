@@ -20,7 +20,7 @@ see [README.md § Relationship to navidrome-experimental](README.md#relationship
 | Open decision: shared vs. private AI tags | Design decision, this doc | ✅ Implemented Option C (private); A/B remain open if ever needed |
 | The plugin itself | This repo | ✅ Working, tested end-to-end in production against Gemini |
 | Anthropic / OpenAI adapters | This repo | ⚠️ Unit-tested only — not yet live-verified against real accounts |
-| Auto-generated playlists from tags | [ai-mood-playlists](https://github.com/RFLundgren/ai-mood-playlists) (separate repo, private fork for now) | 🚧 In progress — see that repo's own `PLAN.md` |
+| Auto-generated playlists from tags | [ai-mood-playlists](https://github.com/RFLundgren/AI-Mood-Playlists-Plugin) (separate repo, private fork for now) | 🚧 In progress — see that repo's own `PLAN.md` |
 
 See [README.md § Status](README.md#status) for the user-facing summary, and the **Known gaps** section near the
 bottom of this doc for the specific things left to do.
@@ -200,7 +200,7 @@ main concrete gap left in this repo.
 section above.
 
 **Phase 5 — auto-generated playlists from tags.** 🚧 New, not originally in this plan. Being built as a separate
-project — see [ai-mood-playlists](https://github.com/RFLundgren/ai-mood-playlists)'s own `PLAN.md` for details.
+project — see [ai-mood-playlists](https://github.com/RFLundgren/AI-Mood-Playlists-Plugin)'s own `PLAN.md` for details.
 That repo is a fork of an existing audio-analysis-based mood-playlist plugin, being reworked to build its
 playlists from this plugin's tags instead of its own audio analysis.
 
@@ -236,7 +236,7 @@ playlists from this plugin's tags instead of its own audio analysis.
   discussed as a good readability win. This is a `navidrome-experimental` UI change (`ui/src/song/SongList.jsx`),
   not something this repo controls — not started.
 - **Auto-generated playlists** — the actual motivating reason for the two-column idea and a bigger piece of
-  work; tracked entirely in [ai-mood-playlists](https://github.com/RFLundgren/ai-mood-playlists), not here.
+  work; tracked entirely in [ai-mood-playlists](https://github.com/RFLundgren/AI-Mood-Playlists-Plugin), not here.
 - **Cleaning up tags written before the fixed vocabulary existed / before dropping a category** — there's no
   bulk-delete built into the plugin (only single-tag `removeUserTag.view`). The approach used in practice: a
   one-off PowerShell script that calls `getAllUserTags.view` to list every tag, `getSongsByUserTag.view` per tag

@@ -3,7 +3,7 @@
 A [Navidrome](https://www.navidrome.org/) plugin that auto-classifies tracks (genre, mood, language) using an AI
 provider (Anthropic, OpenAI, or Gemini), so a whole library becomes filterable by AI-suggested tags instead of
 relying on manually maintained playlists per genre/language. A companion project,
-[AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists), builds and maintains actual playlists from
+[AI Mood Playlists](https://github.com/RFLundgren/AI-Mood-Playlists-Plugin), builds and maintains actual playlists from
 these tags automatically — one per discovered genre/mood value — if you want that on top of just the tags
 themselves.
 
@@ -34,9 +34,15 @@ shared/broadcast visibility options (A/B) remain a deliberate future decision, n
    genres, 12 moods — see `genreVocabulary`/`moodVocabulary` in `providers.go`), with anything the model returns
    outside that list silently dropped. `language` stays open-vocabulary on purpose, since it should reflect the
    track's actual language rather than a curated list. The vocabulary constraint exists specifically so
-   [AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists)' one-playlist-per-tag-value approach
+   [AI Mood Playlists](https://github.com/RFLundgren/AI-Mood-Playlists-Plugin)' one-playlist-per-tag-value approach
    doesn't fragment into near-duplicates (`chill`/`relaxed`/`mellow` for the same idea).
 4. Tags are written back via `setUserTag.view`.
+
+Tags this plugin writes show up under Navidrome's **AI Tags** column in the Songs list (a separate column from
+**My Tags**, which is for a person's own hand-added tags — see `navidrome-experimental`'s README for that
+distinction). They're read-only from the Songs list UI: there's no button there to manually add/remove an
+individual AI Tag on a song. If you want to change which words end up as AI Tags, that happens in this plugin's
+own config (**Genre Vocabulary**/**Mood Vocabulary**, see below), not in the Navidrome UI.
 
 ## Customizing the genre/mood vocabulary
 
@@ -68,7 +74,7 @@ happy, chill, energetic, melancholy, party, aggressive, romantic, dreamy, dark, 
 
 Keep both lists reasonably short and free of near-duplicates (`chill` and `relaxed` meaning the same thing, say)
 — that's the entire point of constraining the vocabulary in the first place. If you use
-[AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists), whatever you configure here is exactly the
+[AI Mood Playlists](https://github.com/RFLundgren/AI-Mood-Playlists-Plugin), whatever you configure here is exactly the
 set of genre/mood playlists it can build, so keep the two plugins' expectations in sync (that plugin's own
 allowlist fields are pre-filled with this same default list, and only need editing if you've customized this
 field too).
@@ -99,7 +105,7 @@ Set via Navidrome's Admin → Plugins → AI Auto-Tagging → Config, after inst
 | `provider` | `anthropic`, `openai`, or `gemini` |
 | `apiKey` | The selected provider's API key |
 | `model` | Model name for the selected provider — verify the exact ID against your provider's current model list |
-| `tagCategories` | Which categories to suggest: any of `genre`, `mood`, `language`. If you're not using [AI Mood Playlists](https://github.com/RFLundgren/ai-mood-playlists) or otherwise don't need language tags, set this to just `genre, mood` — the manifest default includes `language` for anyone installing fresh, but it's a config-only change, no code involved, and won't automatically drop tags already written (see `PLAN.md` for a one-time cleanup approach if you're changing this after already tagging a library) |
+| `tagCategories` | Which categories to suggest: any of `genre`, `mood`, `language`. If you're not using [AI Mood Playlists](https://github.com/RFLundgren/AI-Mood-Playlists-Plugin) or otherwise don't need language tags, set this to just `genre, mood` — the manifest default includes `language` for anyone installing fresh, but it's a config-only change, no code involved, and won't automatically drop tags already written (see `PLAN.md` for a one-time cleanup approach if you're changing this after already tagging a library) |
 | `genreVocabulary` / `moodVocabulary` | Comma-separated, pre-filled with the built-in defaults — edit down or add to customize which genre/mood words the AI is allowed to use. See **Customizing the genre/mood vocabulary** above |
 | `libraryUser` | Username whose library view is used to read tracks and read/write tags |
 | `cron` | Cron expression for how often to scan for untagged tracks |
