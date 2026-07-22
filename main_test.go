@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/navidrome/navidrome/plugins/pdk/go/action"
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 	"github.com/navidrome/navidrome/plugins/pdk/go/pdk"
 	"github.com/navidrome/navidrome/plugins/pdk/go/scheduler"
@@ -189,6 +190,64 @@ func TestOnTaskExecute_ErrorsWithoutAPIKey(t *testing.T) {
 
 	require.Error(t, err)
 	host.HTTPMock.AssertNotCalled(t, "Send", mock.Anything)
+}
+
+func TestOnAction_TestModel_Success(t *testing.T) {
+	resetMocks()
+
+	host.ConfigMock.On("Get", "provider").Return("", false).Once()
+	host.ConfigMock.On("Get", "apiKey").Return("test-key", true).Once()
+	host.ConfigMock.On("Get", "model").Return("", false).Once()
+	host.ConfigMock.On("Get", "tagCategories").Return("", false).Once()
+
+	anthropicBody := `{"content":[{"type":"text","text":"{\"test\":[\"genre:rock\"]}"}]}`
+	host.HTTPMock.On("Send", mock.MatchedBy(func(req host.HTTPRequest) bool {
+		return req.Method == "POST" && req.URL == anthropicAPIURL
+	})).Return(&host.HTTPResponse{StatusCode: 200, Body: []byte(anthropicBody)}, nil).Once()
+
+	result, err := (&plugin{}).OnAction(action.ActionRequest{Name: actionTestModel})
+
+	require.NoError(t, err)
+	require.Contains(t, result, "OK")
+	require.Contains(t, result, "anthropic")
+	host.HTTPMock.AssertExpectations(t)
+	host.SubsonicAPIMock.AssertNotCalled(t, "Call", mock.Anything)
+}
+
+func TestOnAction_TestModel_ErrorsWithoutAPIKey(t *testing.T) {
+	resetMocks()
+
+	host.ConfigMock.On("Get", "provider").Return("", false).Once()
+	host.ConfigMock.On("Get", "apiKey").Return("", false).Once()
+
+	_, err := (&plugin{}).OnAction(action.ActionRequest{Name: actionTestModel})
+
+	require.Error(t, err)
+	host.HTTPMock.AssertNotCalled(t, "Send", mock.Anything)
+}
+
+func TestOnAction_TestModel_PropagatesClassifyError(t *testing.T) {
+	resetMocks()
+
+	host.ConfigMock.On("Get", "provider").Return("", false).Once()
+	host.ConfigMock.On("Get", "apiKey").Return("test-key", true).Once()
+	host.ConfigMock.On("Get", "model").Return("", false).Once()
+	host.ConfigMock.On("Get", "tagCategories").Return("", false).Once()
+
+	host.HTTPMock.On("Send", mock.Anything).
+		Return(&host.HTTPResponse{StatusCode: 401, Body: []byte(`{"error":"unauthorized"}`)}, nil).Once()
+
+	_, err := (&plugin{}).OnAction(action.ActionRequest{Name: actionTestModel})
+
+	require.Error(t, err)
+}
+
+func TestOnAction_UnknownActionErrors(t *testing.T) {
+	resetMocks()
+
+	_, err := (&plugin{}).OnAction(action.ActionRequest{Name: "bogus"})
+
+	require.Error(t, err)
 }
 
 func TestOnCallback_IgnoresOtherSchedules(t *testing.T) {

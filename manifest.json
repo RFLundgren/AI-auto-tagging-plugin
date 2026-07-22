@@ -4,6 +4,13 @@
   "version": "0.1.0",
   "description": "Auto-classifies tracks (genre, mood, language, etc.) using an AI provider so the library becomes filterable by AI-suggested tags",
   "website": "https://github.com/RFLundgren/AI-Auto-Tagging-Plugin",
+  "actions": [
+    {
+      "name": "testModel",
+      "label": "Test Model",
+      "description": "Sends one small test request to the configured provider/model/API key, without touching your library or writing any tags - use this to confirm your settings work before running a real scan."
+    }
+  ],
   "permissions": {
     "scheduler": {
       "reason": "Periodically scan the library for tracks to classify"

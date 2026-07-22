@@ -79,6 +79,29 @@ set of genre/mood playlists it can build, so keep the two plugins' expectations 
 allowlist fields are pre-filled with this same default list, and only need editing if you've customized this
 field too).
 
+## Testing your setup before a real scan
+
+Once you've entered a **Provider**, **API Key**, and **Model**, hit **Save** on the config page first (this
+reloads the plugin with your new settings), then look for a **Test Model** button in an **Actions** section
+further down the same page — this requires `navidrome-experimental`'s on-demand plugin actions feature, see that
+repo's README for the general mechanism.
+
+Clicking it sends **one small request** to your configured provider/model/API key — it does not scan your
+library, does not read any real tracks, and does not write any tags. It exists specifically so you can catch a
+typo'd API key or a wrong model name before committing to a real scan across potentially thousands of tracks (and
+real provider cost).
+
+- **Success** looks like: `OK - anthropic/claude-haiku-4-5 responded in 842ms (test tags: [genre:rock])` — the
+  provider name/model you configured, how long the round trip took, and whatever tag(s) it assigned to a made-up
+  test track (the actual tag value doesn't matter here; a real response coming back at all is the point).
+- **Failure** shows the provider's own error text, e.g. an authentication error for a bad API key, or a "model not
+  found" error for a model name your provider doesn't recognize — the same error a real scan would eventually hit,
+  just surfaced immediately instead of after enqueuing a batch of real tracks.
+
+If the button doesn't appear at all: the plugin needs to be **enabled** (not just configured) for its actions to
+run - and if it's still missing after that, your Navidrome instance may be on a version of `navidrome-experimental`
+from before this feature existed; update it.
+
 ## Cost & AI provider responsibility
 
 This plugin calls a third-party AI provider (Anthropic, OpenAI, or Gemini) directly using **your own API key**,

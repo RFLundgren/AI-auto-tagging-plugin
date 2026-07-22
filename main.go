@@ -15,7 +15,9 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"time"
 
+	"github.com/navidrome/navidrome/plugins/pdk/go/action"
 	"github.com/navidrome/navidrome/plugins/pdk/go/host"
 	"github.com/navidrome/navidrome/plugins/pdk/go/lifecycle"
 	"github.com/navidrome/navidrome/plugins/pdk/go/pdk"
@@ -40,11 +42,14 @@ const (
 
 var defaultTagCategories = []string{"genre", "mood", "language"}
 
+const actionTestModel = "testModel"
+
 func init() {
 	p := &plugin{}
 	lifecycle.Register(p)
 	scheduler.Register(p)
 	taskworker.Register(p)
+	action.Register(p)
 }
 
 type plugin struct{}
@@ -123,6 +128,47 @@ func (p *plugin) OnTaskExecute(req taskworker.TaskExecuteRequest) (string, error
 	result := fmt.Sprintf("classified %d track(s), wrote %d tag(s)", len(batch.Tracks), written)
 	pdk.Log(pdk.LogInfo, fmt.Sprintf("AI Auto-Tagging: %s (provider=%s)", result, providerName))
 	return result, nil
+}
+
+// OnAction handles on-demand actions triggered from the plugin's config page
+// (see manifest.json's "actions" declaration).
+func (p *plugin) OnAction(req action.ActionRequest) (string, error) {
+	switch req.Name {
+	case actionTestModel:
+		return testModel()
+	default:
+		return "", fmt.Errorf("unknown action %q", req.Name)
+	}
+}
+
+// testModel makes one minimal classification call against the configured
+// provider/apiKey/model/vocabulary, without touching the library or writing
+// any tags - lets a user confirm their setup actually works before kicking
+// off a real scan, which could be thousands of tracks and real provider cost.
+func testModel() (string, error) {
+	providerName := configString("provider", defaultProvider)
+	apiKey := configString("apiKey", "")
+	if apiKey == "" {
+		return "", fmt.Errorf("no API key configured for provider %q", providerName)
+	}
+	model := configString("model", defaultModel)
+	categories := configTagCategories()
+
+	c, err := newClassifier(providerName, apiKey, model)
+	if err != nil {
+		return "", err
+	}
+
+	testTrack := trackInfo{ID: "test", Artist: "Test Artist", Title: "Test Track"}
+	start := time.Now()
+	tagsByTrack, err := c.Classify([]trackInfo{testTrack}, categories)
+	if err != nil {
+		return "", fmt.Errorf("%s/%s test call failed: %w", providerName, model, err)
+	}
+	elapsed := time.Since(start)
+
+	return fmt.Sprintf("OK - %s/%s responded in %s (test tags: %v)",
+		providerName, model, elapsed.Round(time.Millisecond), tagsByTrack["test"]), nil
 }
 
 func writeUserTag(user, trackID, tag string) error {
