@@ -1,5 +1,11 @@
 # AI Auto-Tagging Plugin for Navidrome
 
+> ⚠️ **Requires [navidrome-experimental](https://github.com/RFLundgren/navidrome_experimental)** — this plugin
+> **will not work** on stock/upstream Navidrome. It depends on Subsonic endpoints
+> (`setUserTag.view`/`getUserTags.view`/`getAllUserTags.view`/`getSongsByUserTag.view`) that only exist in this
+> personal fork, not in Navidrome itself. If you're not already running `navidrome-experimental`, install/switch to
+> it first — see that repo's README for how to get it — before installing this plugin.
+
 A [Navidrome](https://www.navidrome.org/) plugin that auto-classifies tracks (genre, mood, language) using an AI
 provider (Anthropic, OpenAI, or Gemini), so a whole library becomes filterable by AI-suggested tags instead of
 relying on manually maintained playlists per genre/language. A companion project,
