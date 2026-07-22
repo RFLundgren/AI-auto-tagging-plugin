@@ -141,11 +141,17 @@
         },
         {
           "type": "Control",
-          "scope": "#/properties/genreVocabulary"
+          "scope": "#/properties/genreVocabulary",
+          "options": {
+            "resettable": true
+          }
         },
         {
           "type": "Control",
-          "scope": "#/properties/moodVocabulary"
+          "scope": "#/properties/moodVocabulary",
+          "options": {
+            "resettable": true
+          }
         },
         {
           "type": "Control",

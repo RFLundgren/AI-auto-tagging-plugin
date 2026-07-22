@@ -85,6 +85,12 @@ set of genre/mood playlists it can build, so keep the two plugins' expectations 
 allowlist fields are pre-filled with this same default list, and only need editing if you've customized this
 field too).
 
+**Lost track of the original list after editing it down?** Both fields show a small ↺ (restore) icon at the
+right edge whenever their current value differs from the built-in default — click it to snap the field straight
+back to the full default list shown above, no need to retype or copy-paste it from this README. It only appears
+once you've actually changed the field from its default, and only restores that one field, not your whole config.
+(Requires a recent enough `navidrome-experimental` — this button needs its on-demand config-field-reset support.)
+
 ## Testing your setup before a real scan
 
 Once you've entered a **Provider**, **API Key**, and **Model**, hit **Save** on the config page first (this
