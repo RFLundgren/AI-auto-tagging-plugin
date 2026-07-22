@@ -96,6 +96,33 @@ Before running this against a large library:
   tier) — if classification seems to crawl or fail with `429`/quota errors, that's the likely cause, not a bug. The
   task queue's retry backoff is tuned for roughly a 60-second provider rate-limit window.
 
+## Speeding up classification on a paid account
+
+Three settings together control how fast your library gets tagged: **Batch Size**, **Max Tracks Per Run**, and
+**Classification Concurrency**. The defaults are all sized around a free-tier provider account, where going faster
+than the provider allows just means more requests immediately failing with `429`/quota errors and retrying — not
+actually finishing sooner.
+
+**If you're on a paid provider account/tier, the setting that actually matters is Classification Concurrency**
+(default `2`) — this is how many classification requests run at the same time. Free-tier rate limits (e.g.
+Gemini's free tier at roughly 5 requests/minute) mean 2 concurrent requests is already close to the ceiling, so
+raising it wouldn't help there. Paid tiers commonly allow 150+ requests/minute — comfortably enough headroom that
+concurrency, not the provider's rate limit, becomes the actual bottleneck. For a rough sense of scale: 15,000
+tracks at the default Batch Size (50) is 300 classification calls; at concurrency 2 that's roughly 150 sequential
+rounds of API latency, but at concurrency 8-10 it's roughly 30-40 rounds — several times faster, and still nowhere
+near a typical paid tier's rate limit.
+
+To raise it: set **Classification Concurrency** to something like `5`–`10` as a starting point, save, and watch
+the plugin's logs during a scan. If you start seeing `429`/quota errors again, that means you've gone above what
+your account tier actually allows — dial it back down until they stop. There's no way to know the exact right
+number ahead of time without checking your specific provider account's rate limits (for Gemini, see
+[aistudio.google.com/rate-limit](https://aistudio.google.com/rate-limit)), so treat this as "raise, watch the
+logs, adjust" rather than a one-shot setting.
+
+`maxTracksPerRun` and `batchSize` are a separate concern from concurrency — they control how many tracks get
+*scanned and queued* per scheduled run, not how fast already-queued tracks get classified. Raising concurrency is
+what actually speeds up classification itself.
+
 ## Configuration
 
 Set via Navidrome's Admin → Plugins → AI Auto-Tagging → Config, after installing the `.ndp` package:
@@ -111,6 +138,7 @@ Set via Navidrome's Admin → Plugins → AI Auto-Tagging → Config, after inst
 | `cron` | Cron expression for how often to scan for untagged tracks |
 | `batchSize` | Tracks per classification API call |
 | `maxTracksPerRun` | Ceiling on how many tracks are scanned per scheduled run |
+| `classifyConcurrency` | How many classification requests run in parallel (default `2`, sized for free-tier rate limits). Raise this on a paid provider account/tier — see **Speeding up classification on a paid account** above |
 
 The plugin also needs the **Users Permission** grant (Admin → Plugins → AI Auto-Tagging) for whichever user matches
 `libraryUser`, since it authenticates its Subsonic calls as that account.

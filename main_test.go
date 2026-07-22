@@ -30,6 +30,11 @@ func resetMocks() {
 	// that don't care about a custom vocabulary.
 	host.ConfigMock.On("Get", "genreVocabulary").Return("", false).Maybe()
 	host.ConfigMock.On("Get", "moodVocabulary").Return("", false).Maybe()
+
+	// OnInit always reads classifyConcurrency to size the task queue - default
+	// to "unset" (= use the built-in default of 2) so tests only need to
+	// override it if they're specifically testing that.
+	host.ConfigMock.On("GetInt", "classifyConcurrency").Return(int64(0), false).Maybe()
 }
 
 func TestOnInit_CreatesQueueAndSchedulesScan(t *testing.T) {
@@ -46,6 +51,23 @@ func TestOnInit_CreatesQueueAndSchedulesScan(t *testing.T) {
 	require.NoError(t, err)
 	host.TaskMock.AssertExpectations(t)
 	host.SchedulerMock.AssertExpectations(t)
+}
+
+func TestOnInit_UsesConfiguredConcurrency(t *testing.T) {
+	resetMocks()
+	host.ConfigMock.ExpectedCalls, host.ConfigMock.Calls = nil, nil
+	host.ConfigMock.On("GetInt", "classifyConcurrency").Return(int64(8), true).Once()
+
+	host.TaskMock.On("CreateQueue", classifyQueue, host.QueueConfig{Concurrency: 8, MaxRetries: 3, BackoffMs: 60_000}).
+		Return(nil).Once()
+	host.ConfigMock.On("Get", "cron").Return("0 3 * * *", true).Once()
+	host.SchedulerMock.On("ScheduleRecurring", "0 3 * * *", "", scanScheduleID).
+		Return(scanScheduleID, nil).Once()
+
+	err := (&plugin{}).OnInit()
+
+	require.NoError(t, err)
+	host.TaskMock.AssertExpectations(t)
 }
 
 func TestOnInit_PropagatesScheduleError(t *testing.T) {

@@ -29,12 +29,13 @@ const (
 	offsetKey      = "scan:offset"
 	searchPageSize = 100
 
-	defaultCron       = "0 3 * * *"
-	defaultLibUser    = "admin"
-	defaultBatchSize  = 50
-	defaultMaxPerScan = 500
-	defaultProvider   = "anthropic"
-	defaultModel      = "claude-haiku-4-5"
+	defaultCron        = "0 3 * * *"
+	defaultLibUser     = "admin"
+	defaultBatchSize   = 50
+	defaultMaxPerScan  = 500
+	defaultProvider    = "anthropic"
+	defaultModel       = "claude-haiku-4-5"
+	defaultConcurrency = 2
 )
 
 var defaultTagCategories = []string{"genre", "mood", "language"}
@@ -52,8 +53,15 @@ func (p *plugin) OnInit() error {
 	// BackoffMs starts high (and doubles per retry) because provider rate-limit
 	// windows are typically ~60s - the default 1s backoff burns through all
 	// retries in a few seconds without ever waiting out the window.
+	//
+	// Concurrency defaults to 2, sized for free-tier rate limits (e.g.
+	// Gemini's free tier, ~5 requests/minute) where a higher number would just
+	// mean more requests immediately hitting 429s and backing off. A paid
+	// account can sustain far more parallel requests - see the
+	// classifyConcurrency config field's description for tuning guidance.
+	concurrency := configInt("classifyConcurrency", defaultConcurrency)
 	if err := host.TaskCreateQueue(classifyQueue, host.QueueConfig{
-		Concurrency: 2, MaxRetries: 3, BackoffMs: 60_000,
+		Concurrency: int32(concurrency), MaxRetries: 3, BackoffMs: 60_000,
 	}); err != nil {
 		// Benign if the queue already exists from a prior load.
 		pdk.Log(pdk.LogDebug, fmt.Sprintf("AI Auto-Tagging: task queue not (re)created: %v", err))

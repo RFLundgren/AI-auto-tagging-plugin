@@ -99,6 +99,14 @@
           "description": "Cost/time control ceiling on how many tracks are scanned per scheduled run",
           "default": 500,
           "minimum": 1
+        },
+        "classifyConcurrency": {
+          "type": "integer",
+          "title": "Classification Concurrency",
+          "description": "How many classification requests run in parallel. Default (2) is sized for free-tier rate limits (e.g. Gemini's free tier, around 5 requests/minute) - going higher there just means more requests immediately hitting 429/quota errors and backing off, not faster overall throughput. If you're on a PAID provider account/tier, raise this - paid tiers commonly allow 150+ requests/minute, and leaving this at 2 wastes most of that headroom. A good starting point on a paid tier is 5-10; watch the logs after raising it; if you start seeing 429/quota errors, that means you've gone above what your account tier actually allows and should dial it back down.",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 20
         }
       }
     },
@@ -141,6 +149,10 @@
           "scope": "#/properties/cron"
         },
         {
+          "type": "Label",
+          "text": "Throughput tuning: Batch Size, Max Tracks Per Run, and Classification Concurrency together control how fast your library gets tagged, and are sized by default for a free-tier AI provider account. If you're on a PAID account/tier, the biggest speed gain usually comes from raising Classification Concurrency (see its description below) - the other two mainly control how many tracks get scanned and queued per scheduled run, not how fast queued tracks actually get classified."
+        },
+        {
           "type": "HorizontalLayout",
           "elements": [
             {
@@ -150,6 +162,10 @@
             {
               "type": "Control",
               "scope": "#/properties/maxTracksPerRun"
+            },
+            {
+              "type": "Control",
+              "scope": "#/properties/classifyConcurrency"
             }
           ]
         }
