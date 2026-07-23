@@ -1,7 +1,7 @@
 {
   "name": "AI Auto-Tagging",
   "author": "RFLundgren",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Auto-classifies tracks (genre, mood, language, etc.) using an AI provider so the library becomes filterable by AI-suggested tags",
   "website": "https://github.com/RFLundgren/AI-Auto-Tagging-Plugin",
   "actions": [
