@@ -50,6 +50,15 @@ distinction). They're read-only from the Songs list UI: there's no button there 
 individual AI Tag on a song. If you want to change which words end up as AI Tags, that happens in this plugin's
 own config (**Genre Vocabulary**/**Mood Vocabulary**, see below), not in the Navidrome UI.
 
+`navidrome-experimental` also has **AI Genre** and **AI Mood** sidebar dashboards — chip-grid pages built directly
+from the tags this plugin writes, one chip per distinct value, each linking to a page of every song carrying it
+plus a "Create Playlist" action. See that repo's README for details; nothing in this plugin needs configuring
+differently to use them; they just read whatever this plugin has already written.
+
+<p align="left">
+    <img width="800" src=".github/screenshots/ss-songlist-ai-tags-column.png" alt="Songs list with the AI Tags column visible, showing genre:/mood:/language: values this plugin wrote">
+</p>
+
 ## Customizing the genre/mood vocabulary
 
 The **Genre Vocabulary** and **Mood Vocabulary** config fields control the fixed word list the AI is allowed to
@@ -91,6 +100,10 @@ back to the full default list shown above, no need to retype or copy-paste it fr
 once you've actually changed the field from its default, and only restores that one field, not your whole config.
 (Requires a recent enough `navidrome-experimental` — this button needs its on-demand config-field-reset support.)
 
+<p align="left">
+    <img width="700" src=".github/screenshots/ss-vocabulary-reset-button.png" alt="Genre Vocabulary config field, edited from its default, showing the restore icon at the right edge">
+</p>
+
 ## Testing your setup before a real scan
 
 Once you've entered a **Provider**, **API Key**, and **Model**, hit **Save** on the config page first (this
@@ -109,6 +122,10 @@ real provider cost).
 - **Failure** shows the provider's own error text, e.g. an authentication error for a bad API key, or a "model not
   found" error for a model name your provider doesn't recognize — the same error a real scan would eventually hit,
   just surfaced immediately instead of after enqueuing a batch of real tracks.
+
+<p align="left">
+    <img width="700" src=".github/screenshots/ss-test-model-button.png" alt="Plugin config page, showing the Actions section with the Test Model button and a success result message">
+</p>
 
 If the button doesn't appear at all: the plugin needs to be **enabled** (not just configured) for its actions to
 run - and if it's still missing after that, your Navidrome instance may be on a version of `navidrome-experimental`
