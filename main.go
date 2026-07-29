@@ -28,6 +28,7 @@ import (
 const (
 	scanScheduleID = "ai-auto-tagging-scan"
 	classifyQueue  = "ai-auto-tagging-classify"
+	cleanupQueue   = "ai-auto-tagging-cleanup"
 	offsetKey      = "scan:offset"
 	searchPageSize = 100
 
@@ -38,11 +39,36 @@ const (
 	defaultProvider    = "anthropic"
 	defaultModel       = "claude-haiku-4-5"
 	defaultConcurrency = 2
+
+	// cleanupConcurrency is not user-configurable like classifyConcurrency -
+	// removeUserTag.view calls are cheap, local, and not subject to any AI
+	// provider's rate limit, so a fixed, comfortably-parallel value is enough.
+	cleanupConcurrency = 8
+	cleanupMaxRetries  = 3
+	cleanupBackoffMs   = 2_000
 )
 
 var defaultTagCategories = []string{"genre", "mood", "language"}
 
-const actionTestModel = "testModel"
+const (
+	actionTestModel       = "testModel"
+	actionRemoveAllAITags = "removeAllAiTags"
+	actionForceRetagAll   = "forceRetagAll"
+)
+
+// cleanupMode distinguishes the two bulk actions - both remove every AI tag,
+// only "Force Retag All" also resets the scan so the next scheduled run
+// reclassifies everything from scratch.
+type cleanupMode string
+
+const (
+	cleanupRemoveOnly cleanupMode = "removeOnly"
+	cleanupRetagAll   cleanupMode = "retagAll"
+)
+
+type cleanupTask struct {
+	Mode cleanupMode `json:"mode"`
+}
 
 func init() {
 	p := &plugin{}
@@ -72,6 +98,15 @@ func (p *plugin) OnInit() error {
 		pdk.Log(pdk.LogDebug, fmt.Sprintf("AI Auto-Tagging: task queue not (re)created: %v", err))
 	}
 
+	// Separate queue for the bulk Remove All AI Tags / Force Retag All actions
+	// - tuned differently from classifyQueue since removeUserTag.view calls
+	// are local and cheap, not subject to any AI provider's rate limit.
+	if err := host.TaskCreateQueue(cleanupQueue, host.QueueConfig{
+		Concurrency: cleanupConcurrency, MaxRetries: cleanupMaxRetries, BackoffMs: cleanupBackoffMs,
+	}); err != nil {
+		pdk.Log(pdk.LogDebug, fmt.Sprintf("AI Auto-Tagging: cleanup queue not (re)created: %v", err))
+	}
+
 	cron := configString("cron", defaultCron)
 	if _, err := host.SchedulerScheduleRecurring(cron, "", scanScheduleID); err != nil {
 		return fmt.Errorf("scheduling scan: %w", err)
@@ -88,8 +123,15 @@ func (p *plugin) OnCallback(req scheduler.SchedulerCallbackRequest) error {
 }
 
 func (p *plugin) OnTaskExecute(req taskworker.TaskExecuteRequest) (string, error) {
+	if req.QueueName == cleanupQueue {
+		return executeCleanup(req.Payload)
+	}
+	return executeClassifyBatch(req.Payload)
+}
+
+func executeClassifyBatch(payload []byte) (string, error) {
 	var batch classifyBatch
-	if err := json.Unmarshal(req.Payload, &batch); err != nil {
+	if err := json.Unmarshal(payload, &batch); err != nil {
 		return "", fmt.Errorf("decoding batch payload: %w", err)
 	}
 	if len(batch.Tracks) == 0 {
@@ -136,6 +178,10 @@ func (p *plugin) OnAction(req action.ActionRequest) (string, error) {
 	switch req.Name {
 	case actionTestModel:
 		return testModel()
+	case actionRemoveAllAITags:
+		return enqueueCleanup(cleanupRemoveOnly)
+	case actionForceRetagAll:
+		return enqueueCleanup(cleanupRetagAll)
 	default:
 		return "", fmt.Errorf("unknown action %q", req.Name)
 	}
@@ -171,6 +217,121 @@ func testModel() (string, error) {
 		providerName, model, elapsed.Round(time.Millisecond), tagsByTrack["test"]), nil
 }
 
+// enqueueCleanup queues a background task for the Remove All AI Tags / Force
+// Retag All actions and returns immediately - a library with many AI-tagged
+// tracks could mean thousands of individual removeUserTag.view calls, which
+// must not run synchronously inside OnAction (an action call is fully
+// synchronous end-to-end from the triggering HTTP request, with no built-in
+// background dispatch - see PLAN.md's "Bulk Remove All AI Tags" entry).
+func enqueueCleanup(mode cleanupMode) (string, error) {
+	payload, err := json.Marshal(cleanupTask{Mode: mode})
+	if err != nil {
+		return "", fmt.Errorf("encoding cleanup task: %w", err)
+	}
+	if _, err := host.TaskEnqueue(cleanupQueue, payload); err != nil {
+		return "", fmt.Errorf("enqueueing cleanup: %w", err)
+	}
+	if mode == cleanupRetagAll {
+		return "Started removing AI tags in the background. Once done, the next scheduled scan will treat " +
+			"every track as untagged and reclassify your whole library from scratch - check server logs for progress.", nil
+	}
+	return "Started removing AI tags in the background - check server logs for progress. Tracks stay " +
+		"untagged until a future scan reaches them again.", nil
+}
+
+// executeCleanup runs on the cleanup queue's worker: removes every AI tag,
+// and for "Force Retag All" also resets the scan offset so the next
+// scheduled run reclassifies the whole library from scratch. Reclassifying
+// itself isn't done here - resetting the offset composes with the existing
+// scan/classify pipeline instead of duplicating it.
+func executeCleanup(payload []byte) (string, error) {
+	var t cleanupTask
+	if err := json.Unmarshal(payload, &t); err != nil {
+		return "", fmt.Errorf("decoding cleanup task: %w", err)
+	}
+
+	libUser := configString("libraryUser", defaultLibUser)
+	removed, err := removeAllAITags(libUser)
+	if err != nil {
+		return "", err
+	}
+
+	result := fmt.Sprintf("removed %d AI tag(s)", removed)
+	if t.Mode == cleanupRetagAll {
+		if err := saveOffset(0); err != nil {
+			return "", fmt.Errorf("resetting scan offset: %w", err)
+		}
+		result += ", reset scan offset - next scheduled scan will reclassify the whole library"
+	}
+
+	pdk.Log(pdk.LogInfo, fmt.Sprintf("AI Auto-Tagging: %s", result))
+	return result, nil
+}
+
+// removeAllAITags deletes every AI-written tag from every track for the given
+// library user. getAllUserTags.view/getSongsByUserTag.view are both
+// hardcoded server-side to source=ai for this endpoint family (see
+// PLAN.md), so no source filtering is needed here. Returns how many
+// (track, tag) rows were removed.
+func removeAllAITags(user string) (int, error) {
+	tagNames, err := allAITagNames(user)
+	if err != nil {
+		return 0, fmt.Errorf("listing AI tag names: %w", err)
+	}
+
+	removed := 0
+	for _, tag := range tagNames {
+		trackIDs, err := songsByUserTag(user, tag)
+		if err != nil {
+			return removed, fmt.Errorf("listing tracks for tag %q: %w", tag, err)
+		}
+		for _, id := range trackIDs {
+			if err := removeUserTag(user, id, tag); err != nil {
+				return removed, fmt.Errorf("removing tag %q from track %s: %w", tag, id, err)
+			}
+			removed++
+		}
+	}
+	return removed, nil
+}
+
+func allAITagNames(user string) ([]string, error) {
+	uri := fmt.Sprintf("getAllUserTags?u=%s", url.QueryEscape(user))
+	respJSON, err := host.SubsonicAPICall(uri)
+	if err != nil {
+		return nil, err
+	}
+	var resp subsonicEnvelope
+	if err := json.Unmarshal([]byte(respJSON), &resp); err != nil {
+		return nil, fmt.Errorf("parsing getAllUserTags response: %w", err)
+	}
+	return resp.SubsonicResponse.UserTags.Tag, nil
+}
+
+func songsByUserTag(user, tag string) ([]string, error) {
+	uri := fmt.Sprintf("getSongsByUserTag?u=%s&tag=%s", url.QueryEscape(user), url.QueryEscape(tag))
+	respJSON, err := host.SubsonicAPICall(uri)
+	if err != nil {
+		return nil, err
+	}
+	var resp subsonicEnvelope
+	if err := json.Unmarshal([]byte(respJSON), &resp); err != nil {
+		return nil, fmt.Errorf("parsing getSongsByUserTag response: %w", err)
+	}
+	ids := make([]string, len(resp.SubsonicResponse.SongsByUserTag.Song))
+	for i, s := range resp.SubsonicResponse.SongsByUserTag.Song {
+		ids[i] = s.ID
+	}
+	return ids, nil
+}
+
+func removeUserTag(user, trackID, tag string) error {
+	uri := fmt.Sprintf("removeUserTag?u=%s&id=%s&tag=%s",
+		url.QueryEscape(user), url.QueryEscape(trackID), url.QueryEscape(tag))
+	_, err := host.SubsonicAPICall(uri)
+	return err
+}
+
 func writeUserTag(user, trackID, tag string) error {
 	uri := fmt.Sprintf("setUserTag?u=%s&id=%s&tag=%s",
 		url.QueryEscape(user), url.QueryEscape(trackID), url.QueryEscape(tag))
@@ -204,6 +365,9 @@ type subsonicEnvelope struct {
 		UserTags struct {
 			Tag []string `json:"tag"`
 		} `json:"userTags"`
+		SongsByUserTag struct {
+			Song []subsonicSong `json:"song"`
+		} `json:"songsByUserTag"`
 	} `json:"subsonic-response"`
 }
 

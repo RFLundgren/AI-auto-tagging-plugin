@@ -1,7 +1,7 @@
 {
   "name": "AI Auto-Tagging",
   "author": "RFLundgren",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Auto-classifies tracks (genre, mood, language, etc.) using an AI provider so the library becomes filterable by AI-suggested tags",
   "website": "https://github.com/RFLundgren/AI-Auto-Tagging-Plugin",
   "actions": [
@@ -9,6 +9,16 @@
       "name": "testModel",
       "label": "Test Model",
       "description": "Sends one small test request to the configured provider/model/API key, without touching your library or writing any tags - use this to confirm your settings work before running a real scan."
+    },
+    {
+      "name": "removeAllAiTags",
+      "label": "Remove All AI Tags",
+      "description": "Deletes every AI-written tag from every track. Runs in the background - check server logs for progress. Does not reclassify; tracks stay untagged until a future scan reaches them again."
+    },
+    {
+      "name": "forceRetagAll",
+      "label": "Force Retag All (Overwrite)",
+      "description": "Deletes every AI-written tag, then resets the scan so every track is reclassified from scratch on its next scheduled run. Does not reclassify immediately - the real AI provider cost happens on the next scan, not on click."
     }
   ],
   "permissions": {
@@ -25,7 +35,7 @@
       "reason": "Track a high-water mark so scheduled runs only scan tracks not yet covered"
     },
     "taskqueue": {
-      "reason": "Batch-process track classification in the background, with retries and a concurrency cap"
+      "reason": "Batch-process track classification in the background, with retries and a concurrency cap - also used for the bulk Remove All AI Tags / Force Retag All actions"
     },
     "http": {
       "reason": "Call the configured AI provider's classification API",

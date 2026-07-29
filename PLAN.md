@@ -237,14 +237,25 @@ playlists from this plugin's tags instead of its own audio analysis.
   not something this repo controls — not started.
 - **Auto-generated playlists** — the actual motivating reason for the two-column idea and a bigger piece of
   work; tracked entirely in [ai-mood-playlists](https://github.com/RFLundgren/AI-Mood-Playlists-Plugin), not here.
-- **Cleaning up tags written before the fixed vocabulary existed / before dropping a category** — there's no
-  bulk-delete built into the plugin (only single-tag `removeUserTag.view`). The approach used in practice: a
-  one-off PowerShell script that calls `getAllUserTags.view` to list every tag, `getSongsByUserTag.view` per tag
-  to find every track carrying it, and `removeUserTag.view` per (track, tag) pair to clear it — scoped to
-  whichever tag prefixes you want gone (e.g. `genre:`/`mood:`/`language:`). Defaults to a dry run (prints counts,
-  removes nothing) until explicitly confirmed. Not committed anywhere as a repo script since it's a one-time
-  operation, not a maintained tool — recreate it from this description if needed again. After clearing, tracks
-  show up as untagged again and get picked up on AI Auto-Tagging's next scheduled scan.
+- ✅ **Bulk "Remove All AI Tags" / "Force Retag All" actions** — done. Formalizes the one-off, never-committed
+  PowerShell workaround previously described here into two real Actions on the config page, alongside Test Model.
+  **Remove All AI Tags** deletes every AI-written tag (no reclassification). **Force Retag All (Overwrite)** does
+  the same removal, then resets the scan offset to 0 (`saveOffset(0)`, reusing `runScan`'s own wraparound) so the
+  *next scheduled scan* reclassifies the whole library from scratch - the action itself doesn't reclassify
+  inline, both button descriptions and the returned message say so explicitly. Both actions enqueue onto a new,
+  second task queue (`ai-auto-tagging-cleanup`, separate from `ai-auto-tagging-classify` - no AI-provider rate
+  limit to respect here) and return immediately with an in-progress message, rather than running inline inside
+  `OnAction` - confirmed via `navidrome-experimental`'s `TriggerPluginAction` that an action call is fully
+  synchronous end-to-end with no background dispatch, so a library with thousands of AI-tagged tracks doing
+  thousands of sequential `removeUserTag.view` calls inline would risk a reverse-proxy/browser timeout.
+  `OnTaskExecute` now dispatches on `req.QueueName` rather than assuming every task is a classification batch.
+  Removal itself: enumerate AI tag names (`getAllUserTags.view`, hardcoded server-side to `source=ai` for this
+  endpoint family) → tracks per tag (`getSongsByUserTag.view`) → remove each (`removeUserTag.view`). One documented
+  edge case: `removeUserTag.view` has no source filter at all, so a hand-created My Tag sharing the exact literal
+  name of an AI tag (e.g. someone manually typing `genre:rock`) would also be removed - noted in the README,
+  not solved for, since it requires deliberately mimicking this plugin's own naming convention. No
+  `navidrome-experimental` changes needed; fully contained in this repo. Unit-tested (queue dispatch, both cleanup
+  modes, error propagation) and TinyGo-built/live-verified locally.
 - **AI Tags vs. My Tags as genuinely separate concepts** — today's split between AI-written and user-written
   tags is just a naming convention (the `genre:`/`mood:`/`language:` prefix), not a structural one; both live in
   the same `media_file_tag` rows for whichever account is authenticated. A real separation needs a `source`/

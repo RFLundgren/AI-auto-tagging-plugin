@@ -131,6 +131,31 @@ If the button doesn't appear at all: the plugin needs to be **enabled** (not jus
 run - and if it's still missing after that, your Navidrome instance may be on a version of `navidrome-experimental`
 from before this feature existed; update it.
 
+## Clearing or re-running classification
+
+Two more buttons live in the same **Actions** section as Test Model, for when you want to start over rather than
+just fill in the gaps:
+
+- **Remove All AI Tags** — deletes every tag this plugin has ever written, across your whole library. Doesn't
+  reclassify anything; tracks just go back to being untagged. Useful before changing your genre/mood vocabulary or
+  tag categories and wanting a clean slate, without paying for an immediate re-run.
+- **Force Retag All (Overwrite)** — does the same removal, then resets the scan so every track is treated as
+  untagged again. **This does not reclassify instantly** - it just means the next scheduled scan (whenever your
+  `cron` next fires) will pick up your entire library from scratch, at full AI provider cost. If you want it to
+  happen sooner, temporarily set `cron` to something that fires soon, then set it back afterward.
+
+Both buttons return immediately with an in-progress message ("Started removing AI tags in the background...") -
+the actual removal runs as a background task, the same way scheduled scans do, so a large library doesn't tie up
+the button click waiting on thousands of individual tag removals. Check the server logs for the final count once
+it's done (`AI Auto-Tagging: removed N AI tag(s)...`).
+
+One edge case worth knowing: tag removal isn't scoped by who wrote it, only by (song, tag name). If you ever
+manually created a personal "My Tag" (via Navidrome's own "Edit Tags" dialog) using the exact same literal name as
+one of this plugin's own tags — e.g. typed `genre:rock` by hand — that tag would also get removed by these
+buttons, since it happens to share a name with an AI-written one. Unlikely unless you're deliberately mimicking
+this plugin's `category:value` naming convention, but worth knowing before using this on a library with a lot of
+manual tagging.
+
 ## Cost & AI provider responsibility
 
 This plugin calls a third-party AI provider (Anthropic, OpenAI, or Gemini) directly using **your own API key**,

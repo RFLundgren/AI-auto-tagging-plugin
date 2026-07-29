@@ -43,6 +43,8 @@ func TestOnInit_CreatesQueueAndSchedulesScan(t *testing.T) {
 
 	host.TaskMock.On("CreateQueue", classifyQueue, host.QueueConfig{Concurrency: 2, MaxRetries: 3, BackoffMs: 60_000}).
 		Return(nil).Once()
+	host.TaskMock.On("CreateQueue", cleanupQueue, host.QueueConfig{Concurrency: 8, MaxRetries: 3, BackoffMs: 2_000}).
+		Return(nil).Once()
 	host.ConfigMock.On("Get", "cron").Return("0 3 * * *", true).Once()
 	host.SchedulerMock.On("ScheduleRecurring", "0 3 * * *", "", scanScheduleID).
 		Return(scanScheduleID, nil).Once()
@@ -61,6 +63,8 @@ func TestOnInit_UsesConfiguredConcurrency(t *testing.T) {
 
 	host.TaskMock.On("CreateQueue", classifyQueue, host.QueueConfig{Concurrency: 8, MaxRetries: 3, BackoffMs: 60_000}).
 		Return(nil).Once()
+	host.TaskMock.On("CreateQueue", cleanupQueue, host.QueueConfig{Concurrency: 8, MaxRetries: 3, BackoffMs: 2_000}).
+		Return(nil).Once()
 	host.ConfigMock.On("Get", "cron").Return("0 3 * * *", true).Once()
 	host.SchedulerMock.On("ScheduleRecurring", "0 3 * * *", "", scanScheduleID).
 		Return(scanScheduleID, nil).Once()
@@ -75,6 +79,8 @@ func TestOnInit_PropagatesScheduleError(t *testing.T) {
 	resetMocks()
 
 	host.TaskMock.On("CreateQueue", classifyQueue, host.QueueConfig{Concurrency: 2, MaxRetries: 3, BackoffMs: 60_000}).
+		Return(nil).Once()
+	host.TaskMock.On("CreateQueue", cleanupQueue, host.QueueConfig{Concurrency: 8, MaxRetries: 3, BackoffMs: 2_000}).
 		Return(nil).Once()
 	host.ConfigMock.On("Get", "cron").Return("", false).Once()
 	host.SchedulerMock.On("ScheduleRecurring", defaultCron, "", scanScheduleID).
@@ -240,6 +246,116 @@ func TestOnAction_TestModel_PropagatesClassifyError(t *testing.T) {
 	_, err := (&plugin{}).OnAction(action.ActionRequest{Name: actionTestModel})
 
 	require.Error(t, err)
+}
+
+func TestOnAction_RemoveAllAITags_EnqueuesCleanupTask(t *testing.T) {
+	resetMocks()
+
+	host.TaskMock.On("Enqueue", cleanupQueue, mock.MatchedBy(func(payload []byte) bool {
+		var task cleanupTask
+		if err := json.Unmarshal(payload, &task); err != nil {
+			return false
+		}
+		return task.Mode == cleanupRemoveOnly
+	})).Return("task-1", nil).Once()
+
+	result, err := (&plugin{}).OnAction(action.ActionRequest{Name: actionRemoveAllAITags})
+
+	require.NoError(t, err)
+	require.Contains(t, result, "background")
+	host.TaskMock.AssertExpectations(t)
+}
+
+func TestOnAction_ForceRetagAll_EnqueuesCleanupTask(t *testing.T) {
+	resetMocks()
+
+	host.TaskMock.On("Enqueue", cleanupQueue, mock.MatchedBy(func(payload []byte) bool {
+		var task cleanupTask
+		if err := json.Unmarshal(payload, &task); err != nil {
+			return false
+		}
+		return task.Mode == cleanupRetagAll
+	})).Return("task-1", nil).Once()
+
+	result, err := (&plugin{}).OnAction(action.ActionRequest{Name: actionForceRetagAll})
+
+	require.NoError(t, err)
+	require.Contains(t, result, "next scheduled scan")
+	host.TaskMock.AssertExpectations(t)
+}
+
+func TestOnTaskExecute_Cleanup_RemovesAllAITagsWithoutResettingOffset(t *testing.T) {
+	resetMocks()
+
+	host.ConfigMock.On("Get", "libraryUser").Return("admin", true).Once()
+
+	host.SubsonicAPIMock.On("Call", "getAllUserTags?u=admin").
+		Return(`{"subsonic-response":{"userTags":{"tag":["genre:rock","mood:chill"]}}}`, nil).Once()
+	host.SubsonicAPIMock.On("Call", "getSongsByUserTag?u=admin&tag=genre%3Arock").
+		Return(`{"subsonic-response":{"songsByUserTag":{"song":[{"id":"t1"},{"id":"t2"}]}}}`, nil).Once()
+	host.SubsonicAPIMock.On("Call", "getSongsByUserTag?u=admin&tag=mood%3Achill").
+		Return(`{"subsonic-response":{"songsByUserTag":{"song":[{"id":"t3"}]}}}`, nil).Once()
+	host.SubsonicAPIMock.On("Call", "removeUserTag?u=admin&id=t1&tag=genre%3Arock").Return("", nil).Once()
+	host.SubsonicAPIMock.On("Call", "removeUserTag?u=admin&id=t2&tag=genre%3Arock").Return("", nil).Once()
+	host.SubsonicAPIMock.On("Call", "removeUserTag?u=admin&id=t3&tag=mood%3Achill").Return("", nil).Once()
+
+	payload, err := json.Marshal(cleanupTask{Mode: cleanupRemoveOnly})
+	require.NoError(t, err)
+
+	result, err := (&plugin{}).OnTaskExecute(taskworker.TaskExecuteRequest{
+		QueueName: cleanupQueue,
+		Payload:   payload,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "removed 3 AI tag(s)", result)
+	host.SubsonicAPIMock.AssertExpectations(t)
+	host.KVStoreMock.AssertNotCalled(t, "Set", mock.Anything, mock.Anything)
+}
+
+func TestOnTaskExecute_Cleanup_RetagAllAlsoResetsOffset(t *testing.T) {
+	resetMocks()
+
+	host.ConfigMock.On("Get", "libraryUser").Return("admin", true).Once()
+
+	host.SubsonicAPIMock.On("Call", "getAllUserTags?u=admin").
+		Return(`{"subsonic-response":{"userTags":{"tag":["genre:rock"]}}}`, nil).Once()
+	host.SubsonicAPIMock.On("Call", "getSongsByUserTag?u=admin&tag=genre%3Arock").
+		Return(`{"subsonic-response":{"songsByUserTag":{"song":[{"id":"t1"}]}}}`, nil).Once()
+	host.SubsonicAPIMock.On("Call", "removeUserTag?u=admin&id=t1&tag=genre%3Arock").Return("", nil).Once()
+	host.KVStoreMock.On("Set", offsetKey, []byte("0")).Return(nil).Once()
+
+	payload, err := json.Marshal(cleanupTask{Mode: cleanupRetagAll})
+	require.NoError(t, err)
+
+	result, err := (&plugin{}).OnTaskExecute(taskworker.TaskExecuteRequest{
+		QueueName: cleanupQueue,
+		Payload:   payload,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "removed 1 AI tag(s), reset scan offset - next scheduled scan will reclassify the whole library", result)
+	host.SubsonicAPIMock.AssertExpectations(t)
+	host.KVStoreMock.AssertExpectations(t)
+}
+
+func TestOnTaskExecute_Cleanup_PropagatesRemovalError(t *testing.T) {
+	resetMocks()
+
+	host.ConfigMock.On("Get", "libraryUser").Return("admin", true).Once()
+	host.SubsonicAPIMock.On("Call", "getAllUserTags?u=admin").
+		Return("", errors.New("subsonic unavailable")).Once()
+
+	payload, err := json.Marshal(cleanupTask{Mode: cleanupRemoveOnly})
+	require.NoError(t, err)
+
+	_, err = (&plugin{}).OnTaskExecute(taskworker.TaskExecuteRequest{
+		QueueName: cleanupQueue,
+		Payload:   payload,
+	})
+
+	require.Error(t, err)
+	host.KVStoreMock.AssertNotCalled(t, "Set", mock.Anything, mock.Anything)
 }
 
 func TestOnAction_UnknownActionErrors(t *testing.T) {
