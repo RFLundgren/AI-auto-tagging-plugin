@@ -173,6 +173,36 @@ Before running this against a large library:
   tier) — if classification seems to crawl or fail with `429`/quota errors, that's the likely cause, not a bug. The
   task queue's retry backoff is tuned for roughly a 60-second provider rate-limit window.
 
+## Choosing a model: quality vs. cost
+
+The **Model** field accepts any model name your chosen provider supports, from their fastest/cheapest tier
+(e.g. Claude Haiku, GPT-mini, Gemini Flash) up to their most capable/expensive one (e.g. Claude Opus, full GPT,
+Gemini Pro). A few things worth knowing before picking one:
+
+- **The accuracy gap is smaller than you'd expect.** Genre/mood/language classification from artist/title/album
+  metadata against a small fixed vocabulary is a much easier task for an LLM than open-ended reasoning, so the
+  fast/cheap tier usually gets well-known tracks right just as reliably as the flagship tier. A bigger model tends
+  to help mainly with **obscure/lesser-known artists** (needs more background knowledge to place them correctly),
+  **genre-blending or ambiguous tracks** (a judgment call rather than a recall), and **foreign-language titles/
+  artists**. If your library skews mainstream, you're probably leaving little on the table with the cheap tier; if
+  it's heavy on deep-cuts, indie, or non-English music, a stronger model may catch more of those correctly.
+- **The cost gap is real in ratio, small in absolute terms.** A provider's fast/budget tier is typically around
+  10-20x cheaper per token than its flagship tier — but the actual request per track here is tiny (just artist/
+  title/album strings, batched ~50 at a time, not audio or lyrics), so a full-library backfill is a few hundred
+  short API calls either way. For a personal library in the tens of thousands of tracks, even the pricier tier's
+  one-time bill likely lands in the cents-to-low-single-digit-dollars range, not something that scales the way
+  large-document or long-conversation use cases do. And since already-tagged tracks are skipped (see **How it
+  works** above), this is a one-time backfill cost, not a recurring one — new tracks trickling in afterward are
+  negligible on any tier.
+- **Recommendation:** don't over-optimize for cost here, since the ratio's real-dollar impact is usually small.
+  Tag a batch of ~100 tracks with the cheap tier first (a small `maxTracksPerRun` is good for this), spot-check
+  the results by hand, and only reach for a pricier model if you see a real pattern of misses — not just
+  occasional disagreement on a genuinely fuzzy case like "is this rock or alternative." If you do want to
+  re-tag with a different model afterward, **Force Retag All** (see above) makes that a one-click switch rather
+  than needing to clear tags by hand first.
+- As always, check your provider's current pricing and model list before a large run — both change often enough
+  that specific numbers here would go stale.
+
 ## Speeding up classification on a paid account
 
 Three settings together control how fast your library gets tagged: **Batch Size**, **Max Tracks Per Run**, and
